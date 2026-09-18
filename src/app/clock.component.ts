@@ -39,14 +39,14 @@ export interface HslColor {
  * 8 Anclas horarias distribuidas en ciclo circular de 24h.
  */
 export const TIME_ANCHORS: TimeAnchor[] = [
-  { name: 'Medianoche', hour: 2.0,   h: 240, s: 45, l: 12, suggestedText: '#FAF6EE' },
-  { name: 'Madrugada',  hour: 5.0,   h: 255, s: 35, l: 24, suggestedText: '#FAF6EE' },
-  { name: 'Amanecer',   hour: 7.0,   h: 18,  s: 85, l: 62, suggestedText: '#141312' },
-  { name: 'Mañana',     hour: 9.5,   h: 200, s: 70, l: 60, suggestedText: '#141312' },
-  { name: 'Mediodía',   hour: 12.5,  h: 200, s: 45, l: 75, suggestedText: '#141312' },
-  { name: 'Tarde',      hour: 15.5,  h: 38,  s: 75, l: 60, suggestedText: '#141312' },
-  { name: 'Atardecer',  hour: 18.25, h: 12,  s: 80, l: 55, suggestedText: '#141312' },
-  { name: 'Noche',      hour: 21.75, h: 250, s: 45, l: 22, suggestedText: '#FAF6EE' },
+  { name: 'Medianoche', hour: 2.0,   h: 240, s: 42, l: 12, suggestedText: '#FAF6EE' },
+  { name: 'Madrugada',  hour: 5.0,   h: 252, s: 32, l: 22, suggestedText: '#FAF6EE' },
+  { name: 'Amanecer',   hour: 7.0,   h: 28,  s: 72, l: 64, suggestedText: '#141312' },
+  { name: 'Mañana',     hour: 9.5,   h: 206, s: 56, l: 64, suggestedText: '#141312' },
+  { name: 'Mediodía',   hour: 12.5,  h: 198, s: 36, l: 78, suggestedText: '#141312' },
+  { name: 'Tarde',      hour: 15.5,  h: 40,  s: 66, l: 62, suggestedText: '#141312' },
+  { name: 'Atardecer',  hour: 18.25, h: 16,  s: 74, l: 56, suggestedText: '#141312' },
+  { name: 'Noche',      hour: 21.75, h: 248, s: 40, l: 20, suggestedText: '#FAF6EE' },
 ];
 
 export const COLOR_DARK_TEXT = '#141312';
@@ -280,8 +280,25 @@ export class ClockComponent implements OnInit, OnDestroy {
 
     const hDiff = shortestHueDiff(prev.h, next.h);
     const h = Math.round((((prev.h + hDiff * factor) % 360) + 360) % 360);
-    const s = Math.round(lerp(prev.s, next.s, factor) * 10) / 10;
-    const l = Math.round(lerp(prev.l, next.l, factor) * 10) / 10;
+
+    // Modelo biocéntrico de atenuación solar (Rayleigh Scattering) para saltos angulares amplios (> 110°):
+    // Suaviza la transición hacia un tono crema/marfil etéreo, eliminando fucsias neón y verdes indeseados
+    const absDiff = Math.abs(hDiff);
+    let sInterp = lerp(prev.s, next.s, factor);
+    let lInterp = lerp(prev.l, next.l, factor);
+
+    if (absDiff > 110) {
+      const dipWeight = Math.min(1.0, (absDiff - 110) / 60) * 0.62;
+      const dip = Math.sin(factor * Math.PI) * dipWeight;
+      sInterp = sInterp * (1 - dip);
+
+      // Sutil realce lumínico diurno para mantener la radiancia natural de la atmósfera
+      const solarLuminanceBoost = Math.sin(factor * Math.PI) * (dipWeight * 4);
+      lInterp = Math.min(88, lInterp + solarLuminanceBoost);
+    }
+
+    const s = Math.round(sInterp * 10) / 10;
+    const l = Math.round(lInterp * 10) / 10;
 
     const hsl: HslColor = { h, s, l };
     const contrastInfo = evaluateWcagContrast(hsl);
