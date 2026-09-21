@@ -305,6 +305,19 @@ export class ClockComponent implements OnInit, OnDestroy {
 
     const phaseName = factor < 0.5 ? prev.name : next.name;
 
+    // Colores armónicos biocéntricos para los orbes de luz ambiental flotantes
+    const orb1Hue = (h + 38) % 360;
+    const orb1Sat = Math.min(95, Math.max(45, s + 15));
+    const orb1Lum = Math.min(80, Math.max(25, l + 6));
+
+    const orb2Hue = (h - 32 + 360) % 360;
+    const orb2Sat = Math.min(90, Math.max(40, s + 10));
+    const orb2Lum = Math.min(75, Math.max(20, l - 6));
+
+    const orb3Hue = (h + 160) % 360;
+    const orb3Sat = Math.min(75, Math.max(30, s));
+    const orb3Lum = Math.min(70, Math.max(18, l));
+
     return {
       hsl,
       backgroundColor: `hsl(${h}, ${s}%, ${l}%)`,
@@ -314,7 +327,10 @@ export class ClockComponent implements OnInit, OnDestroy {
       phaseName,
       prevAnchor: prev.name,
       nextAnchor: next.name,
-      factorPercent: Math.round(factor * 100)
+      factorPercent: Math.round(factor * 100),
+      orb1Color: `hsl(${orb1Hue}, ${orb1Sat}%, ${orb1Lum}%)`,
+      orb2Color: `hsl(${orb2Hue}, ${orb2Sat}%, ${orb2Lum}%)`,
+      orb3Color: `hsl(${orb3Hue}, ${orb3Sat}%, ${orb3Lum}%)`,
     };
   });
 
@@ -323,6 +339,39 @@ export class ClockComponent implements OnInit, OnDestroy {
   readonly phaseName = computed(() => this.colorState().phaseName);
   readonly contrastRatio = computed(() => this.colorState().contrastRatio);
   readonly wcagLevel = computed(() => this.colorState().wcagLevel);
+  readonly isLightMode = computed(() => this.textColor() === COLOR_DARK_TEXT);
+  readonly orb1Color = computed(() => this.colorState().orb1Color);
+  readonly orb2Color = computed(() => this.colorState().orb2Color);
+  readonly orb3Color = computed(() => this.colorState().orb3Color);
+  readonly anchors = TIME_ANCHORS;
+
+  getAnchorId(name: string): string {
+    const map: Record<string, string> = {
+      'Medianoche': 'chipMedianoche',
+      'Madrugada': 'chipMadrugada',
+      'Amanecer': 'chipAmanecer',
+      'Mañana': 'chipManana',
+      'Mediodía': 'chipMediodia',
+      'Tarde': 'chipTarde',
+      'Atardecer': 'chipAtardecer',
+      'Noche': 'chipNoche',
+    };
+    return map[name] || `chip${name}`;
+  }
+
+  readonly phaseIcon = computed<string>(() => {
+    switch (this.phaseName()) {
+      case 'Medianoche': return '🌙';
+      case 'Madrugada': return '🌌';
+      case 'Amanecer': return '🌅';
+      case 'Mañana': return '🌤️';
+      case 'Mediodía': return '☀️';
+      case 'Tarde': return '🌞';
+      case 'Atardecer': return '🌇';
+      case 'Noche': return '🌠';
+      default: return '✨';
+    }
+  });
 
   constructor() {
     // Sincronización reactiva inmediata del paisaje sonoro ante cualquier cambio de fase horaria
