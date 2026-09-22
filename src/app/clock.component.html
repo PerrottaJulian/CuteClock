@@ -1,120 +1,48 @@
 <main
   class="clock-container"
-  [class.zen-active]="settings.isZenMode()"
   [class.light-mode]="isLightMode()"
+  [class.we-paused]="wp.isPaused()"
   [style.--bg-color]="backgroundColor()"
   [style.--text-color]="textColor()"
   [style.--orb-1]="orb1Color()"
   [style.--orb-2]="orb2Color()"
   [style.--orb-3]="orb3Color()"
+  [style.--clock-scale]="wp.clockScale()"
+  [style.--clock-pos-y]="wp.clockPositionY() + '%'"
+  [style.--clock-font]="wp.fontFamily()"
+  [style.--glass-blur]="wp.glassBlur() + 'px'"
+  [style.--parallax-x]="(mouseX() * 12) + 'px'"
+  [style.--parallax-y]="(mouseY() * 12) + 'px'"
   role="main"
 >
-  <!-- Capa 1: Orbes de Luz Circadiana y Auroras Flotantes (Refracción Glassmórfica Viva) -->
-  <div class="ambient-orbs-layer" aria-hidden="true">
-    <div class="ambient-orb orb-1"></div>
-    <div class="ambient-orb orb-2"></div>
-    <div class="ambient-orb orb-3"></div>
-  </div>
-
-  <!-- Capa 3: Isla de Cristal Flotante Superior (Dynamic Glass Island) -->
-  @if (!settings.isZenMode()) {
-    <header class="top-nav-wrapper">
-      <nav class="glass-island" aria-label="Acciones del reloj biocéntrico">
-        <!-- Botón de Audio Ambiental Circadiano -->
-        <button
-          id="audioToggleBtn"
-          type="button"
-          class="glass-island-btn"
-          (click)="toggleAudio()"
-          [class.active]="settings.isAudioEnabled()"
-          [title]="settings.isAudioEnabled() ? 'Silenciar paisaje sonoro (M)' : 'Activar paisaje sonoro biocéntrico (M)'"
-        >
-          <span class="btn-icon">{{ settings.isAudioEnabled() ? '🔊' : '🔇' }}</span>
-          <span class="btn-text">Audio</span>
-          @if (settings.isAudioEnabled()) {
-            <span class="audio-waves" aria-hidden="true">
-              <span class="wave-bar"></span>
-              <span class="wave-bar"></span>
-              <span class="wave-bar"></span>
-            </span>
-          }
-          <kbd class="shortcut-key">M</kbd>
-        </button>
-
-        <span class="island-divider"></span>
-
-        <!-- Botón de Modo Zen -->
-        <button
-          id="zenToggleBtn"
-          type="button"
-          class="glass-island-btn"
-          (click)="toggleZenMode()"
-          title="Activar Modo Zen (Z)"
-        >
-          <span class="btn-icon">🧘</span>
-          <span class="btn-text">Zen</span>
-          <kbd class="shortcut-key">Z</kbd>
-        </button>
-
-        <!-- Botón de Pantalla Completa -->
-        <button
-          id="fullscreenToggleBtn"
-          type="button"
-          class="glass-island-btn"
-          (click)="toggleFullscreen()"
-          title="Alternar pantalla completa (F)"
-        >
-          <span class="btn-icon">⛶</span>
-          <span class="btn-text">Pantalla</span>
-          <kbd class="shortcut-key">F</kbd>
-        </button>
-
-        <span class="island-divider"></span>
-
-        <!-- Botón de Menú de Ajustes -->
-        <button
-          id="settingsToggleBtn"
-          type="button"
-          class="glass-island-btn"
-          (click)="toggleSettings()"
-          [class.active]="showSettingsMenu()"
-          [attr.aria-expanded]="showSettingsMenu()"
-          title="Preferencias del reloj"
-        >
-          <span class="btn-icon gear-icon">⚙️</span>
-          <span class="btn-text">Ajustes</span>
-        </button>
-      </nav>
-    </header>
-  }
-
-  <!-- Píldora sutil para salir del Modo Zen -->
-  @if (settings.isZenMode()) {
-    <div
-      class="zen-exit-pill"
-      (click)="toggleZenMode()"
-      role="button"
-      tabindex="0"
-      title="Presiona Z o haz clic para salir"
-    >
-      <span class="zen-bullet"></span>
-      <span>Modo Zen • Presiona <strong>Z</strong> o haz clic para volver</span>
+  <!-- Capa 1: Orbes de Luz Circadiana y Auroras Flotantes (Refracción Glassmórfica) -->
+  @if (wp.enableAmbientOrbs()) {
+    <div class="ambient-orbs-layer" aria-hidden="true">
+      <div class="ambient-orb orb-1"></div>
+      <div class="ambient-orb orb-2"></div>
+      <div class="ambient-orb orb-3"></div>
     </div>
   }
 
   <!-- Capa 2: Cápsula Central de Vidrio Esmerilado (Glass Chrono Capsule) -->
-  <article class="glass-chrono-card" aria-label="Reloj Biocéntrico Digital">
-    <!-- Encabezado de la cápsula: Fecha y Fase Solar -->
-    <header class="chrono-card-header">
-      <div class="glass-chip date-chip" aria-label="Fecha actual">
-        <span class="chip-icon">📅</span>
-        <span class="chip-text">{{ dateString() }}</span>
-      </div>
-      <div class="glass-chip phase-chip" aria-label="Fase solar activa">
-        <span class="phase-symbol">{{ phaseIcon() }}</span>
-        <span class="phase-label">{{ phaseName() }}</span>
-      </div>
-    </header>
+  <article class="glass-chrono-card" aria-label="Reloj Biocéntrico Wallpaper Engine">
+    <!-- Encabezado de la cápsula: Fecha y Fase Solar Opcionales -->
+    @if (wp.showDate() || wp.showPhase()) {
+      <header class="chrono-card-header">
+        @if (wp.showDate()) {
+          <div class="glass-chip date-chip" aria-label="Fecha actual">
+            <span class="chip-icon">📅</span>
+            <span class="chip-text">{{ dateString() }}</span>
+          </div>
+        }
+        @if (wp.showPhase()) {
+          <div class="glass-chip phase-chip" aria-label="Fase solar activa">
+            <span class="phase-symbol">{{ phaseIcon() }}</span>
+            <span class="phase-label">{{ phaseName() }}</span>
+          </div>
+        }
+      </header>
+    }
 
     <!-- Visualizador Horario Tabular Digital -->
     <div class="chrono-time-display">
@@ -122,8 +50,7 @@
         class="clock-time"
         [attr.datetime]="timeString()"
         role="timer"
-        aria-live="polite"
-        aria-atomic="true"
+        aria-live="off"
       >
         {{ timeString() }}
       </time>
@@ -132,220 +59,42 @@
       }
     </div>
 
-    <!-- Arco Solar Circadiano Glassmórfico -->
-    <div class="circadian-track-container" aria-label="Progreso del ciclo solar de 24 horas">
-      <div class="circadian-milestones">
-        <span class="milestone-label">🌙 00:00</span>
-        <span class="milestone-label center-milestone">☀️ 12:00 Mediodía</span>
-        <span class="milestone-label">🌌 24:00</span>
-      </div>
+    <!-- Arco Solar Circadiano Glassmórfico de 24 horas -->
+    @if (wp.showSolarTrack()) {
+      <div class="circadian-track-container" aria-label="Progreso del ciclo solar de 24 horas">
+        <div class="circadian-milestones">
+          <span class="milestone-label">🌙 00:00</span>
+          <span class="milestone-label center-milestone">☀️ 12:00 Mediodía</span>
+          <span class="milestone-label">🌌 24:00</span>
+        </div>
 
-      <div class="glass-solar-track">
-        <div class="solar-glow-fill" [style.width.%]="solarProgressPercent()"></div>
-        <div
-          class="solar-orb-marker"
-          [style.left.%]="solarProgressPercent()"
-          [title]="'Progreso solar: ' + solarProgressPercent() + '% (' + decimalTime().toFixed(2) + 'h)'"
-        >
-          <span class="marker-core"></span>
-          <span class="marker-halo"></span>
+        <div class="glass-solar-track">
+          <div class="solar-glow-fill" [style.width.%]="solarProgressPercent()"></div>
+          <div
+            class="solar-orb-marker"
+            [style.left.%]="solarProgressPercent()"
+            aria-hidden="true"
+          >
+            <span class="marker-core"></span>
+            <span class="marker-halo"></span>
+          </div>
+        </div>
+
+        <div class="solar-progress-readout">
+          <span>Progreso Solar: <strong>{{ solarProgressPercent() }}%</strong></span>
+          <span>Ciclo Continuo de 24h</span>
         </div>
       </div>
+    }
 
-      <div class="solar-progress-readout">
-        <span>Progreso Solar: <strong>{{ solarProgressPercent() }}%</strong></span>
-        <span>{{ isSimulationActive() ? 'Hora Simulada' : 'Tiempo Local Continuo' }}</span>
-      </div>
-    </div>
-
-    <!-- Pie de la cápsula: Certificación WCAG y Sincronización Solar -->
-    <footer class="chrono-card-footer">
-      <div class="glass-chip wcag-chip" title="Ratio de contraste dinámico conforme a WCAG 2.1">
-        <span class="wcag-indicator">✓</span>
-        <span>WCAG {{ wcagLevel() }} • {{ contrastRatio() }}:1</span>
-      </div>
-      @if (settings.isRealSunEnabled() && geoSolarTimes()) {
-        <div class="glass-chip geo-chip" title="Horarios astronómicos reales calculados">
-          <span>🌅 {{ geoSolarTimes()!.sunrise.toFixed(1) }}h • 🌇 {{ geoSolarTimes()!.sunset.toFixed(1) }}h</span>
+    <!-- Pie de la cápsula: Certificación WCAG (Opcional) -->
+    @if (wp.showWcagBadge()) {
+      <footer class="chrono-card-footer">
+        <div class="glass-chip wcag-chip" title="Ratio de contraste dinámico conforme a WCAG 2.1">
+          <span class="wcag-indicator">✓</span>
+          <span>WCAG {{ wcagLevel() }} • {{ contrastRatio() }}:1</span>
         </div>
-      }
-    </footer>
+      </footer>
+    }
   </article>
-
-  <!-- Capa 5: Modal de Preferencias (Glass Sheet Modal) -->
-  @if (showSettingsMenu() && !settings.isZenMode()) {
-    <div class="glass-settings-backdrop" (click)="toggleSettings()" aria-hidden="true"></div>
-    <aside class="glass-settings-sheet" role="dialog" aria-label="Preferencias de CuteClock">
-      <div class="sheet-header">
-        <div class="sheet-title-group">
-          <span class="sheet-icon">⚙️</span>
-          <h3>Preferencias del Reloj</h3>
-        </div>
-        <button type="button" class="glass-close-btn" (click)="toggleSettings()" title="Cerrar ajustes">✕</button>
-      </div>
-
-      <div class="sheet-content">
-        <!-- Formato 24h / 12h -->
-        <div class="glass-setting-card">
-          <div class="setting-text">
-            <span class="setting-title">Formato Horario</span>
-            <span class="setting-caption">Alternar entre 24 horas militar o 12 horas con AM/PM</span>
-          </div>
-          <button
-            id="timeFormatToggle"
-            type="button"
-            class="glass-toggle-pill"
-            (click)="settings.toggleTimeFormat()"
-          >
-            {{ settings.timeFormat() }}
-          </button>
-        </div>
-
-        <!-- Mostrar Segundos -->
-        <div class="glass-setting-card">
-          <div class="setting-text">
-            <span class="setting-title">Segundero Tabular</span>
-            <span class="setting-caption">Mostrar u ocultar los segundos continuos con tipografía monoespaciada</span>
-          </div>
-          <button
-            id="secondsToggle"
-            type="button"
-            class="glass-toggle-pill"
-            [class.active]="settings.showSeconds()"
-            (click)="settings.toggleSeconds()"
-          >
-            {{ settings.showSeconds() ? 'Activo' : 'Oculto' }}
-          </button>
-        </div>
-
-        <!-- Sincronización Solar Real -->
-        <div class="glass-setting-card">
-          <div class="setting-text">
-            <span class="setting-title">Sol Astronómico Real</span>
-            <span class="setting-caption">
-              @if (geoSolarTimes()) {
-                Orto {{ geoSolarTimes()!.sunrise.toFixed(1) }}h • Ocaso {{ geoSolarTimes()!.sunset.toFixed(1) }}h (Geolocalizado)
-              } @else {
-                Calcular orto y ocaso exactos según tu ubicación
-              }
-            </span>
-          </div>
-          <button
-            id="geoSyncBtn"
-            type="button"
-            class="glass-toggle-pill"
-            [class.active]="settings.isRealSunEnabled()"
-            (click)="requestGeolocation()"
-          >
-            {{ settings.isRealSunEnabled() ? 'Desactivar' : 'Ubicar mi Sol' }}
-          </button>
-        </div>
-      </div>
-    </aside>
-  }
-
-  <!-- Capa 4: Dock de Estudio Circadiano / Simulador de 24h (Glass Studio Dock) -->
-  @if (!settings.isZenMode()) {
-    <section class="glass-studio-dock" aria-label="Estudio Circadiano y Simulador de 24 horas">
-      <!-- Botón Gatillo del Dock (cuando está cerrado) -->
-      @if (!showControls()) {
-        <button
-          id="simulatorToggleBtn"
-          type="button"
-          class="glass-dock-trigger"
-          (click)="toggleControls()"
-          [attr.aria-expanded]="showControls()"
-          title="Alternar simulador de ciclo de 24h"
-        >
-          <span class="trigger-icon">☀️</span>
-          <span class="trigger-text">{{ isSimulationActive() ? 'Modo Simulación Activo' : 'Estudio Circadiano' }}</span>
-          <span class="trigger-chevron">▲</span>
-        </button>
-      }
-
-      <!-- Panel Expandible del Dock -->
-      @if (showControls()) {
-        <div id="simulatorPanel" class="glass-studio-panel" role="region" aria-label="Simulador de ciclo de 24 horas">
-          <div class="studio-header">
-            <div class="studio-title-group">
-              <span class="studio-badge">24H</span>
-              <h4>Simulador de Ciclo Solar</h4>
-            </div>
-            <div class="studio-header-actions">
-              @if (isSimulationActive()) {
-                <button id="liveModeBtn" class="glass-btn-live" (click)="toggleLiveMode()" title="Restaurar reloj al tiempo actual">
-                  <span class="pulse-live"></span> Volver a Hora Real
-                </button>
-              }
-              <button
-                id="simulatorToggleBtn"
-                type="button"
-                class="glass-dock-close-btn"
-                (click)="toggleControls()"
-                [attr.aria-expanded]="showControls()"
-                title="Minimizar panel de estudio"
-              >
-                ✕
-              </button>
-            </div>
-          </div>
-
-          <!-- Slider de recorrido continuo 24h -->
-          <div class="studio-slider-box">
-            <div class="slider-header-row">
-              <span class="slider-label">Explorar hora del ciclo</span>
-              <span class="slider-value"><strong>{{ timeString() }}</strong> ({{ decimalTime().toFixed(2) }}h)</span>
-            </div>
-            <div class="slider-track-wrap">
-              <input
-                id="hourSlider"
-                type="range"
-                min="0"
-                max="23.99"
-                step="0.05"
-                [value]="decimalTime()"
-                (input)="onSimulationChange($event)"
-                class="glass-hour-slider"
-                aria-label="Selector de hora simulada"
-              />
-            </div>
-          </div>
-
-          <!-- Gemas de las 8 Anclas Circadianas -->
-          <div class="anchor-gems-grid" aria-label="Navegación de las 8 anclas biocéntricas">
-            @for (anchor of anchors; track anchor.name) {
-              <button
-                [id]="getAnchorId(anchor.name)"
-                type="button"
-                class="anchor-gem"
-                [class.active-anchor]="phaseName() === anchor.name"
-                (click)="selectAnchor(anchor.hour)"
-                [title]="anchor.name + ' (' + anchor.hour + 'h)'"
-              >
-                <span class="gem-swatch" [style.background]="'hsl(' + anchor.h + ', ' + anchor.s + '%, ' + anchor.l + '%)'"></span>
-                <span class="gem-name">{{ anchor.name }}</span>
-                <span class="gem-time">{{ anchor.hour.toFixed(1) }}h</span>
-              </button>
-            }
-          </div>
-
-          <!-- Telemetría cromática en tiempo real -->
-          <div class="studio-telemetry">
-            <div class="telemetry-item">
-              <span class="telemetry-label">Fondo</span>
-              <code id="detailBg" class="glass-code">{{ backgroundColor() }}</code>
-            </div>
-            <div class="telemetry-item">
-              <span class="telemetry-label">Texto</span>
-              <code id="detailText" class="glass-code">{{ textColor() }}</code>
-            </div>
-            <div class="telemetry-item">
-              <span class="telemetry-label">Contraste</span>
-              <code class="glass-code">{{ contrastRatio() }}:1 ({{ wcagLevel() }})</code>
-            </div>
-          </div>
-        </div>
-      }
-    </section>
-  }
 </main>

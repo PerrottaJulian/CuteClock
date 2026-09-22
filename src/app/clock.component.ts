@@ -7,12 +7,12 @@ import {
   effect,
   DestroyRef,
   inject,
-  HostListener
+  HostListener,
+  ChangeDetectionStrategy
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { SettingsService, TimeFormat } from './services/settings.service';
+import { WallpaperEngineService } from './services/wallpaper-engine.service';
 import { CircadianAudioService } from './services/circadian-audio.service';
-import { SolarCalculatorService, SolarTimes } from './services/solar-calculator.service';
 
 /**
  * Estructura de ancla horaria para el motor de iluminación natural biocéntrica.
@@ -137,6 +137,41 @@ export function hslToRgb(h: number, s: number, l: number): [number, number, numb
 }
 
 /**
+ * Parsea cadenas CSS (hexadecimal o rgb) a valores normalizados [0, 1].
+ */
+export function parseCssColorToRgb(color: string): [number, number, number] {
+  const trimmed = color.trim();
+
+  // Caso rgb(r, g, b)
+  const rgbMatch = trimmed.match(/^rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/i);
+  if (rgbMatch) {
+    return [
+      parseInt(rgbMatch[1], 10) / 255,
+      parseInt(rgbMatch[2], 10) / 255,
+      parseInt(rgbMatch[3], 10) / 255
+    ];
+  }
+
+  // Caso hexadecimal #rrggbb o #rgb
+  if (trimmed.startsWith('#')) {
+    const hex = trimmed.slice(1);
+    if (hex.length === 3) {
+      const r = parseInt(hex[0] + hex[0], 16) / 255;
+      const g = parseInt(hex[1] + hex[1], 16) / 255;
+      const b = parseInt(hex[2] + hex[2], 16) / 255;
+      return [r, g, b];
+    } else if (hex.length >= 6) {
+      const r = parseInt(hex.slice(0, 2), 16) / 255;
+      const g = parseInt(hex.slice(2, 4), 16) / 255;
+      const b = parseInt(hex.slice(4, 6), 16) / 255;
+      return [r, g, b];
+    }
+  }
+
+  return [0.1, 0.1, 0.15];
+}
+
+/**
  * Luminancia relativa según estándar WCAG 2.1.
  */
 export function getRelativeLuminance(r: number, g: number, b: number): number {
@@ -155,19 +190,16 @@ export function calculateContrastRatio(lum1: number, lum2: number): number {
 const LUM_DARK = getRelativeLuminance(20 / 255, 19 / 255, 18 / 255);
 const LUM_LIGHT = getRelativeLuminance(250 / 255, 246 / 255, 238 / 255);
 
-export function evaluateWcagContrast(hsl: HslColor): {
+export function evaluateWcagFromRgb(r: number, g: number, b: number): {
   textColor: string;
   contrastRatio: number;
   wcagLevel: 'AA' | 'AAA';
 } {
-  const [r, g, b] = hslToRgb(hsl.h, hsl.s, hsl.l);
   const bgLuminance = getRelativeLuminance(r, g, b);
-
   const ratioWithLight = calculateContrastRatio(LUM_LIGHT, bgLuminance);
   const ratioWithDark = calculateContrastRatio(LUM_DARK, bgLuminance);
 
-  const useLightText = hsl.l < 45 || ratioWithLight >= ratioWithDark;
-
+  const useLightText = ratioWithLight >= ratioWithDark;
   const textColor = useLightText ? COLOR_LIGHT_TEXT : COLOR_DARK_TEXT;
   const contrastRatio = useLightText ? ratioWithLight : ratioWithDark;
   const wcagLevel = contrastRatio >= 7.0 ? 'AAA' : 'AA';
@@ -175,66 +207,57 @@ export function evaluateWcagContrast(hsl: HslColor): {
   return { textColor, contrastRatio, wcagLevel };
 }
 
+export function evaluateWcagContrast(hsl: HslColor): {
+  textColor: string;
+  contrastRatio: number;
+  wcagLevel: 'AA' | 'AAA';
+} {
+  const [r, g, b] = hslToRgb(hsl.h, hsl.s, hsl.l);
+  return evaluateWcagFromRgb(r, g, b);
+}
+
 @Component({
   selector: 'app-clock',
   standalone: true,
   imports: [CommonModule],
   templateUrl: './clock.component.html',
-  styleUrls: ['./clock.component.css']
+  styleUrls: ['./clock.component.css'],
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ClockComponent implements OnInit, OnDestroy {
   private readonly destroyRef = inject(DestroyRef);
-  readonly settings = inject(SettingsService);
+  readonly wp = inject(WallpaperEngineService);
   readonly audio = inject(CircadianAudioService);
-  readonly solarCalc = inject(SolarCalculatorService);
 
-  private timerId: ReturnType<typeof setInterval> | null = null;
+  private tickTimerId: ReturnType<typeof setTimeout> | null = null;
 
   // --- SIGNALS REACTIVOS PRINCIPALES ---
   readonly currentTime = signal<Date>(new Date());
-  readonly isSimulationActive = signal<boolean>(false);
-  readonly simulatedDecimalHour = signal<number>(12.0);
-  readonly showControls = signal<boolean>(false);
-  readonly showSettingsMenu = signal<boolean>(false);
-  readonly geoSolarTimes = signal<SolarTimes | null>(null);
+  readonly mouseX = signal<number>(0);
+  readonly mouseY = signal<number>(0);
 
   /**
-   * Cálculo continuo del tiempo en formato decimal
+   * Cálculo continuo del tiempo en formato decimal estricto según la hora del sistema
    */
   readonly decimalTime = computed<number>(() => {
-    if (this.isSimulationActive()) {
-      return this.simulatedDecimalHour();
-    }
     const d = this.currentTime();
     return d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600;
   });
 
   /**
-   * Formateo adaptable del reloj digital: 24h o 12h con o sin segundos
+   * Formateo adaptable del reloj digital: 24h o 12h con o sin segundos según Wallpaper Engine
    */
   readonly timeFormattedData = computed<{
     mainTime: string;
     period: string;
   }>(() => {
-    let hours: number;
-    let minutes: number;
-    let seconds: number;
-
-    if (this.isSimulationActive()) {
-      const dec = this.simulatedDecimalHour();
-      hours = Math.floor(dec);
-      const remM = (dec - hours) * 60;
-      minutes = Math.floor(remM);
-      seconds = Math.floor((remM - minutes) * 60);
-    } else {
-      const d = this.currentTime();
-      hours = d.getHours();
-      minutes = d.getMinutes();
-      seconds = d.getSeconds();
-    }
+    const d = this.currentTime();
+    let hours = d.getHours();
+    const minutes = d.getMinutes();
+    const seconds = d.getSeconds();
 
     let period = '';
-    const is12h = this.settings.timeFormat() === '12h';
+    const is12h = this.wp.timeFormat() === '12h';
 
     if (is12h) {
       period = hours >= 12 ? 'PM' : 'AM';
@@ -245,7 +268,7 @@ export class ClockComponent implements OnInit, OnDestroy {
     const mStr = this.padZero(minutes);
     const sStr = this.padZero(seconds);
 
-    const mainTime = this.settings.showSeconds()
+    const mainTime = this.wp.showSeconds()
       ? `${hStr}:${mStr}:${sStr}`
       : `${hStr}:${mStr}`;
 
@@ -272,17 +295,46 @@ export class ClockComponent implements OnInit, OnDestroy {
   });
 
   /**
-   * Motor de interpolación circular HSL
+   * Motor de color: calcula el estado cromático dinámico biocéntrico o aplica el modo personalizado.
    */
   readonly colorState = computed(() => {
+    const isCustom = this.wp.backgroundMode() === 'custom';
+
+    // Fases biocéntricas calculadas
     const t = this.decimalTime();
     const { prev, next, factor } = findEnclosingAnchors(t);
+    const phaseName = factor < 0.5 ? prev.name : next.name;
 
+    if (isCustom) {
+      const bgColor = this.wp.customBgColor();
+      let textColor = this.wp.customTextColor();
+      let contrastRatio = 'N/A';
+      let wcagLevel = 'AA';
+
+      if (this.wp.autoContrast()) {
+        const [r, g, b] = parseCssColorToRgb(bgColor);
+        const evalResult = evaluateWcagFromRgb(r, g, b);
+        textColor = evalResult.textColor;
+        contrastRatio = evalResult.contrastRatio.toFixed(2);
+        wcagLevel = evalResult.wcagLevel;
+      }
+
+      return {
+        backgroundColor: bgColor,
+        textColor,
+        contrastRatio,
+        wcagLevel,
+        phaseName,
+        orb1Color: 'rgba(255, 255, 255, 0.12)',
+        orb2Color: 'rgba(255, 255, 255, 0.08)',
+        orb3Color: 'rgba(255, 255, 255, 0.06)',
+      };
+    }
+
+    // Modo biocéntrico continuo con atenuación solar (Rayleigh Scattering)
     const hDiff = shortestHueDiff(prev.h, next.h);
     const h = Math.round((((prev.h + hDiff * factor) % 360) + 360) % 360);
 
-    // Modelo biocéntrico de atenuación solar (Rayleigh Scattering) para saltos angulares amplios (> 110°):
-    // Suaviza la transición hacia un tono crema/marfil etéreo, eliminando fucsias neón y verdes indeseados
     const absDiff = Math.abs(hDiff);
     let sInterp = lerp(prev.s, next.s, factor);
     let lInterp = lerp(prev.l, next.l, factor);
@@ -292,7 +344,6 @@ export class ClockComponent implements OnInit, OnDestroy {
       const dip = Math.sin(factor * Math.PI) * dipWeight;
       sInterp = sInterp * (1 - dip);
 
-      // Sutil realce lumínico diurno para mantener la radiancia natural de la atmósfera
       const solarLuminanceBoost = Math.sin(factor * Math.PI) * (dipWeight * 4);
       lInterp = Math.min(88, lInterp + solarLuminanceBoost);
     }
@@ -303,9 +354,7 @@ export class ClockComponent implements OnInit, OnDestroy {
     const hsl: HslColor = { h, s, l };
     const contrastInfo = evaluateWcagContrast(hsl);
 
-    const phaseName = factor < 0.5 ? prev.name : next.name;
-
-    // Colores armónicos biocéntricos para los orbes de luz ambiental flotantes
+    // Orbes armónicos biocéntricos
     const orb1Hue = (h + 38) % 360;
     const orb1Sat = Math.min(95, Math.max(45, s + 15));
     const orb1Lum = Math.min(80, Math.max(25, l + 6));
@@ -319,15 +368,11 @@ export class ClockComponent implements OnInit, OnDestroy {
     const orb3Lum = Math.min(70, Math.max(18, l));
 
     return {
-      hsl,
       backgroundColor: `hsl(${h}, ${s}%, ${l}%)`,
       textColor: contrastInfo.textColor,
       contrastRatio: contrastInfo.contrastRatio.toFixed(2),
       wcagLevel: contrastInfo.wcagLevel,
       phaseName,
-      prevAnchor: prev.name,
-      nextAnchor: next.name,
-      factorPercent: Math.round(factor * 100),
       orb1Color: `hsl(${orb1Hue}, ${orb1Sat}%, ${orb1Lum}%)`,
       orb2Color: `hsl(${orb2Hue}, ${orb2Sat}%, ${orb2Lum}%)`,
       orb3Color: `hsl(${orb3Hue}, ${orb3Sat}%, ${orb3Lum}%)`,
@@ -343,21 +388,6 @@ export class ClockComponent implements OnInit, OnDestroy {
   readonly orb1Color = computed(() => this.colorState().orb1Color);
   readonly orb2Color = computed(() => this.colorState().orb2Color);
   readonly orb3Color = computed(() => this.colorState().orb3Color);
-  readonly anchors = TIME_ANCHORS;
-
-  getAnchorId(name: string): string {
-    const map: Record<string, string> = {
-      'Medianoche': 'chipMedianoche',
-      'Madrugada': 'chipMadrugada',
-      'Amanecer': 'chipAmanecer',
-      'Mañana': 'chipManana',
-      'Mediodía': 'chipMediodia',
-      'Tarde': 'chipTarde',
-      'Atardecer': 'chipAtardecer',
-      'Noche': 'chipNoche',
-    };
-    return map[name] || `chip${name}`;
-  }
 
   readonly phaseIcon = computed<string>(() => {
     switch (this.phaseName()) {
@@ -374,157 +404,94 @@ export class ClockComponent implements OnInit, OnDestroy {
   });
 
   constructor() {
-    // Sincronización reactiva inmediata del paisaje sonoro ante cualquier cambio de fase horaria
+    // Sincronización reactiva del audio ambiental según las propiedades y el estado de pausa
     effect(() => {
+      const audioEnabled = this.wp.enableAudio();
+      const volume = this.wp.audioVolume();
+      const isPaused = this.wp.isPaused();
       const phase = this.phaseName();
-      if (this.audio.active) {
-        this.audio.updatePhaseAcoustics(phase);
+
+      this.audio.setVolume(volume);
+
+      if (isPaused) {
+        this.audio.pause();
+      } else if (audioEnabled) {
+        if (!this.audio.active) {
+          this.audio.start(phase);
+        } else {
+          this.audio.updatePhaseAcoustics(phase);
+        }
+      } else if (!audioEnabled && this.audio.active) {
+        this.audio.stop();
+      }
+    });
+
+    // Manejo reactivo de pausa / reanudación del reloj para ahorro total de recursos
+    effect(() => {
+      const paused = this.wp.isPaused();
+      if (paused) {
+        this.clearTickTimer();
+      } else {
+        this.currentTime.set(new Date());
+        this.scheduleNextTick();
       }
     });
   }
 
   ngOnInit(): void {
-    this.startClock();
+    this.scheduleNextTick();
   }
 
   ngOnDestroy(): void {
-    this.stopClock();
+    this.clearTickTimer();
     this.audio.stop();
   }
 
   /**
-   * Atajos de teclado para productividad y confort visual:
-   * - Z: Modo Zen
-   * - F: Pantalla Completa
-   * - M: Silenciar / Activar Audio Ambiental
-   * - Esc: Salir de Modo Zen / Controles
+   * Sincronización precisa a la frontera exacta del segundo (1000 - Date.now() % 1000).
+   * Elimina cualquier desfase temporal o microvibración.
    */
-  @HostListener('window:keydown', ['$event'])
-  handleKeyboardEvent(event: KeyboardEvent): void {
-    const key = event.key.toLowerCase();
-    const target = event.target as HTMLElement;
-    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
-      return;
-    }
+  private scheduleNextTick(): void {
+    this.clearTickTimer();
+    if (this.wp.isPaused()) return;
 
-    if (key === 'z') {
-      this.toggleZenMode();
-    } else if (key === 'f') {
-      this.toggleFullscreen();
-    } else if (key === 'm') {
-      this.toggleAudio();
-    } else if (key === 'escape') {
-      if (this.settings.isZenMode()) {
-        this.settings.isZenMode.set(false);
-      }
-      this.showControls.set(false);
-      this.showSettingsMenu.set(false);
-    }
-  }
+    const now = Date.now();
+    const delay = Math.max(16, 1000 - (now % 1000));
 
-  private startClock(): void {
-    this.timerId = setInterval(() => {
+    this.tickTimerId = setTimeout(() => {
       this.currentTime.set(new Date());
-      // Actualización acústica suave si el audio está activo
-      if (this.audio.active) {
+      if (this.audio.active && !this.wp.isPaused()) {
         this.audio.updatePhaseAcoustics(this.phaseName());
       }
-    }, 1000);
-
-    this.destroyRef.onDestroy(() => {
-      this.stopClock();
-    });
+      this.scheduleNextTick();
+    }, delay);
   }
 
-  private stopClock(): void {
-    if (this.timerId !== null) {
-      clearInterval(this.timerId);
-      this.timerId = null;
+  private clearTickTimer(): void {
+    if (this.tickTimerId !== null) {
+      clearTimeout(this.tickTimerId);
+      this.tickTimerId = null;
     }
   }
 
-  toggleZenMode(): void {
-    this.settings.toggleZenMode();
+  /**
+   * Desactivar el menú contextual por defecto del navegador para experiencia de fondo de pantalla nativo.
+   */
+  @HostListener('window:contextmenu', ['$event'])
+  onContextMenu(event: MouseEvent): void {
+    event.preventDefault();
   }
 
-  toggleFullscreen(): void {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch(() => {});
-    } else {
-      document.exitFullscreen().catch(() => {});
-    }
-  }
-
-  async toggleAudio(): Promise<void> {
-    if (this.audio.active) {
-      this.audio.stop();
-      this.settings.isAudioEnabled.set(false);
-    } else {
-      await this.audio.start(this.phaseName());
-      this.settings.isAudioEnabled.set(true);
-    }
-  }
-
-  toggleSettings(): void {
-    this.showSettingsMenu.update(v => !v);
-  }
-
-  toggleControls(): void {
-    this.showControls.update(v => !v);
-  }
-
-  onSimulationChange(event: Event): void {
-    const value = parseFloat((event.target as HTMLInputElement).value);
-    this.simulatedDecimalHour.set(value);
-    this.isSimulationActive.set(true);
-    if (this.audio.active) {
-      this.audio.updatePhaseAcoustics(this.phaseName());
-    }
-  }
-
-  toggleLiveMode(): void {
-    this.isSimulationActive.set(false);
-    this.currentTime.set(new Date());
-    if (this.audio.active) {
-      this.audio.updatePhaseAcoustics(this.phaseName());
-    }
-  }
-
-  selectAnchor(hour: number): void {
-    this.simulatedDecimalHour.set(hour);
-    this.isSimulationActive.set(true);
-    if (this.audio.active) {
-      this.audio.updatePhaseAcoustics(this.phaseName());
-    }
-  }
-
-  requestGeolocation(): void {
-    if (this.settings.isRealSunEnabled()) {
-      // Si ya está activo, desactivar y volver al ciclo biocéntrico estándar
-      this.settings.isRealSunEnabled.set(false);
-      this.geoSolarTimes.set(null);
-      return;
-    }
-
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const times = this.solarCalc.calculateSolarTimes(
-            new Date(),
-            pos.coords.latitude,
-            pos.coords.longitude
-          );
-          this.geoSolarTimes.set(times);
-          this.settings.isRealSunEnabled.set(true);
-        },
-        () => {
-          // Fallback a coordenadas de referencia si el usuario no otorga permisos
-          const times = this.solarCalc.calculateSolarTimes(new Date(), -34.6037, -58.3816);
-          this.geoSolarTimes.set(times);
-          this.settings.isRealSunEnabled.set(true);
-        }
-      );
-    }
+  /**
+   * Efecto sutil de paralaje ambiental reactivo al cursor (opcional).
+   */
+  @HostListener('window:mousemove', ['$event'])
+  onMouseMove(event: MouseEvent): void {
+    if (!this.wp.enableParallax() || this.wp.isPaused()) return;
+    const x = (event.clientX / window.innerWidth - 0.5) * 2;
+    const y = (event.clientY / window.innerHeight - 0.5) * 2;
+    this.mouseX.set(Math.round(x * 100) / 100);
+    this.mouseY.set(Math.round(y * 100) / 100);
   }
 
   private padZero(num: number): string {

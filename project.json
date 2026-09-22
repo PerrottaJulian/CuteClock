@@ -1,0 +1,153 @@
+{
+  "contentrating": "Everyone",
+  "description": "CuteClock - Reloj digital biocéntrico circadiano de alto rendimiento con diseño glassmórfico y paisaje sonoro orgánico.",
+  "file": "index.html",
+  "general": {
+    "properties": {
+      "schemecolor": {
+        "order": 1,
+        "text": "ui_browse_properties_scheme_color",
+        "type": "color",
+        "value": "0.1 0.12 0.16"
+      },
+      "timeformat": {
+        "order": 2,
+        "text": "Formato de Hora",
+        "type": "combo",
+        "value": "24h",
+        "options": [
+          { "label": "24 Horas (23:59)", "value": "24h" },
+          { "label": "12 Horas (11:59 PM)", "value": "12h" }
+        ]
+      },
+      "showseconds": {
+        "order": 3,
+        "text": "Mostrar Segundos",
+        "type": "bool",
+        "value": true
+      },
+      "showdate": {
+        "order": 4,
+        "text": "Mostrar Fecha",
+        "type": "bool",
+        "value": true
+      },
+      "showphase": {
+        "order": 5,
+        "text": "Mostrar Fase Solar / Circadiana",
+        "type": "bool",
+        "value": true
+      },
+      "showsolartrack": {
+        "order": 6,
+        "text": "Mostrar Barra de Ciclo Solar (24h)",
+        "type": "bool",
+        "value": true
+      },
+      "showwcagbadge": {
+        "order": 7,
+        "text": "Mostrar Insignia de Contraste WCAG",
+        "type": "bool",
+        "value": false
+      },
+      "fontfamily": {
+        "order": 8,
+        "text": "Tipografía",
+        "type": "combo",
+        "value": "Outfit",
+        "options": [
+          { "label": "Outfit (Moderna & Suave)", "value": "Outfit" },
+          { "label": "Plus Jakarta Sans (Geométrica)", "value": "Plus Jakarta Sans" },
+          { "label": "Monospace (Tabular Fijo)", "value": "monospace" },
+          { "label": "System UI (Nativo del Sistema)", "value": "system-ui" }
+        ]
+      },
+      "clockscale": {
+        "order": 9,
+        "text": "Escala del Reloj (%)",
+        "type": "slider",
+        "min": 50,
+        "max": 150,
+        "step": 5,
+        "value": 100
+      },
+      "clockpositiony": {
+        "order": 10,
+        "text": "Posición Vertical (%)",
+        "type": "slider",
+        "min": -30,
+        "max": 30,
+        "step": 1,
+        "value": 0
+      },
+      "backgroundmode": {
+        "order": 11,
+        "text": "Modo de Fondo",
+        "type": "combo",
+        "value": "circadian",
+        "options": [
+          { "label": "Biocéntrico Dinámico (Ciclo Natural 24h)", "value": "circadian" },
+          { "label": "Color Personalizado Fijo", "value": "custom" }
+        ]
+      },
+      "custombgcolor": {
+        "order": 12,
+        "text": "Color de Fondo Personalizado",
+        "type": "color",
+        "value": "0.1 0.12 0.16"
+      },
+      "customtextcolor": {
+        "order": 13,
+        "text": "Color de Texto Personalizado",
+        "type": "color",
+        "value": "0.98 0.96 0.93"
+      },
+      "autocontrast": {
+        "order": 14,
+        "text": "Contraste Automático Inteligente (WCAG 2.1)",
+        "type": "bool",
+        "value": true
+      },
+      "enableambientorbs": {
+        "order": 15,
+        "text": "Efectos de Luz Ambiental (Orbes Flotantes)",
+        "type": "bool",
+        "value": true
+      },
+      "glassblur": {
+        "order": 16,
+        "text": "Intensidad Desenfoque de Vidrio (px)",
+        "type": "slider",
+        "min": 0,
+        "max": 50,
+        "step": 2,
+        "value": 28
+      },
+      "enableaudio": {
+        "order": 17,
+        "text": "Paisaje Sonoro Circadiano (Audio Ambiental)",
+        "type": "bool",
+        "value": false
+      },
+      "audiovolume": {
+        "order": 18,
+        "text": "Volumen del Paisaje Sonoro",
+        "type": "slider",
+        "min": 0,
+        "max": 100,
+        "step": 1,
+        "value": 20
+      },
+      "enableparallax": {
+        "order": 19,
+        "text": "Paralaje Reactivo al Ratón",
+        "type": "bool",
+        "value": false
+      }
+    }
+  },
+  "preview": "preview.png",
+  "title": "CuteClock - Biocentric Circadian Clock",
+  "type": "web",
+  "version": 1
+}

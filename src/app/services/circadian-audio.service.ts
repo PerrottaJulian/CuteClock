@@ -32,6 +32,7 @@ export class CircadianAudioService {
   private activeNodes: { stop?: () => void; disconnect: () => void }[] = [];
   private currentPhase: string | null = null;
   private isPlaying = false;
+  private volume = 0.2;
 
   private ensureAudioContext(): AudioContext {
     if (!this.audioCtx) {
@@ -48,23 +49,74 @@ export class CircadianAudioService {
   }
 
   /**
+   * Ajusta el volumen maestro en tiempo real (0..100).
+   */
+  setVolume(volPercent: number): void {
+    const clamped = Math.max(0, Math.min(100, volPercent));
+    // Escalar a un rango confortable no estridente [0, 0.40]
+    this.volume = (clamped / 100) * 0.40;
+
+    if (this.audioCtx && this.masterGain && this.isPlaying) {
+      const now = this.audioCtx.currentTime;
+      this.masterGain.gain.cancelScheduledValues(now);
+      this.masterGain.gain.setValueAtTime(this.masterGain.gain.value, now);
+      this.masterGain.gain.linearRampToValueAtTime(this.volume, now + 0.2);
+    }
+  }
+
+  /**
    * Inicia la reproducción del paisaje sonoro según la fase actual.
    */
   async start(phaseName: string): Promise<void> {
     const ctx = this.ensureAudioContext();
 
     if (ctx.state === 'suspended') {
-      await ctx.resume();
+      try {
+        await ctx.resume();
+      } catch (_) {}
     }
 
     this.isPlaying = true;
     this.switchPhaseSoundscape(phaseName, true);
 
-    // Entrada suave (Fade in) de 1.5s
+    // Entrada suave (Fade in) de 1.5s adaptada al volumen configurado
+    const now = ctx.currentTime;
+    const targetVolume = Math.max(0.01, this.volume);
+    this.masterGain!.gain.cancelScheduledValues(now);
+    this.masterGain!.gain.setValueAtTime(this.masterGain!.gain.value, now);
+    this.masterGain!.gain.linearRampToValueAtTime(targetVolume, now + 1.5);
+  }
+
+  /**
+   * Pausa inmediata de bajo consumo para Wallpaper Engine.
+   */
+  pause(): void {
+    if (!this.audioCtx || !this.masterGain || !this.isPlaying) return;
+    const now = this.audioCtx.currentTime;
+    this.masterGain.gain.cancelScheduledValues(now);
+    this.masterGain.gain.setValueAtTime(this.masterGain.gain.value, now);
+    this.masterGain.gain.linearRampToValueAtTime(0.0001, now + 0.1);
+    if (this.audioCtx.state === 'running') {
+      this.audioCtx.suspend().catch(() => {});
+    }
+  }
+
+  /**
+   * Reanudación tras pausa de Wallpaper Engine.
+   */
+  async resumeAudio(phaseName: string): Promise<void> {
+    if (!this.isPlaying) return;
+    const ctx = this.ensureAudioContext();
+    if (ctx.state === 'suspended') {
+      try {
+        await ctx.resume();
+      } catch (_) {}
+    }
     const now = ctx.currentTime;
     this.masterGain!.gain.cancelScheduledValues(now);
     this.masterGain!.gain.setValueAtTime(this.masterGain!.gain.value, now);
-    this.masterGain!.gain.linearRampToValueAtTime(0.18, now + 1.5);
+    this.masterGain!.gain.linearRampToValueAtTime(Math.max(0.01, this.volume), now + 1.0);
+    this.updatePhaseAcoustics(phaseName);
   }
 
   /**
